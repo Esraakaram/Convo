@@ -115,10 +115,8 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
       socket.on("receive-message", (msg) => {
         console.log("وصلت رسالة من socket:", msg);
         if (!isMounted) return;
-        if (
-          (msg.sender === chat.id && msg.receiver === user.id) ||
-          (msg.sender === user.id && msg.receiver === chat.id)
-        ) {
+        // Only add message if it's not from the current user
+        if (msg.sender === chat.id && msg.receiver === user.id) {
           setMessages((prev) => {
             if (prev.some((m) => m._id === msg._id)) return prev;
             const updated = [...prev, msg];
@@ -129,20 +127,16 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
           });
           
           // Mark message as read if we're the receiver
-          if (msg.sender === chat.id && msg.receiver === user.id) {
-            socket.emit("mark-as-read", { messageId: msg._id });
-          }
+          socket.emit("mark-as-read", { messageId: msg._id });
           
-          if (msg.sender === chat.id && notificationSound.current) {
+          if (notificationSound.current) {
             notificationSound.current.play().catch(() => {});
           }
-          if (msg.sender === chat.id) {
-            if (window.Notification && Notification.permission === "granted") {
-              new Notification(`رسالة جديدة من ${chat.name}`, {
-                body: msg.content,
-                icon: chat.avatar || "/placeholder.svg"
-              });
-            }
+          if (window.Notification && Notification.permission === "granted") {
+            new Notification(`رسالة جديدة من ${chat.name}`, {
+              body: msg.content,
+              icon: chat.avatar || "/placeholder.svg"
+            });
           }
         }
       });
@@ -268,10 +262,13 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
       let sentMsg = null;
       if (groupId) {
         sentMsg = await sendGroupMessage(groupId, content);
-      } else if (socketRef.current) {
-        sentMsg = await sendDirectMessage(chat.id, content);
       } else {
-        sentMsg = await sendMessage(chat.id, content);
+        // Use only one method to send the message
+        if (socketRef.current) {
+          sentMsg = await sendDirectMessage(chat.id, content);
+        } else {
+          sentMsg = await sendMessage(chat.id, content);
+        }
       }
       const messageObj = sentMsg?.data || sentMsg;
       if (onSendMessage && messageObj) onSendMessage(groupId || chat?.id, messageObj);
