@@ -222,8 +222,7 @@ export const checkAuth = async (req, res) => {
   }
 };
 
-
-export const getUserByName = async (req,res)=>{
+export const getUserByName = async (req, res) => {
   const userName = req.params;
   try {
     const user = await User.findOne({ fullName: userName }).select(
@@ -235,17 +234,17 @@ export const getUserByName = async (req,res)=>{
   } catch (error) {
     res.status(500).json({ message: "Internal Server Error" });
   }
-}
+};
 
 export const searchUsers = async (req, res) => {
   try {
     const { query } = req.query;
     const currentUserId = req.user._id;
-    
+
     if (!query || query.trim().length < 1) {
       return res.status(400).json({ message: "Search query is required" });
     }
-    
+
     // Search for users whose fullName or email contains the query string
     // Exclude the current user from search results
     // Case insensitive search with regex
@@ -254,13 +253,13 @@ export const searchUsers = async (req, res) => {
         { _id: { $ne: currentUserId } }, // Exclude current user
         {
           $or: [
-            { fullName: { $regex: query, $options: 'i' } },
-            { email: { $regex: query, $options: 'i' } }
-          ]
-        }
-      ]
-    }).select('fullName email profilePic _id');
-    
+            { fullName: { $regex: query, $options: "i" } },
+            { email: { $regex: query, $options: "i" } },
+          ],
+        },
+      ],
+    }).select("fullName email profilePic _id");
+
     res.status(200).json({ users });
   } catch (error) {
     console.log("Error in searchUsers controller:", error.message);

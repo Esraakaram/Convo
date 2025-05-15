@@ -106,18 +106,36 @@ export const sendGroupMessage = async (req, res) => {
   const { groupId } = req.params;
   const sender = req.user._id;
   const { content } = req.body;
+
   if (!content) return res.status(400).json({ message: "Content required" });
+
   try {
     const group = await Group.findById(groupId);
     if (!group) return res.status(404).json({ message: "Group not found" });
-    if (!group.members.includes(sender)) return res.status(403).json({ message: "Not a group member" });
+
+    // 🟨 Debug logs
+    console.log("sender:", sender);
+    console.log("group members:", group.members);
+
+    // 🔍 تحقق من أن المرسل عضو في المجموعة
+    console.log("Sender ID:", sender.toString());
+const isMember = group.members.some(member => member.toString() === sender.toString());
+if (!isMember) {
+  return res.status(403).json({ message: "Not a group member" });
+}
+
     const message = new Message({ sender, group: groupId, content });
     await message.save();
+
     res.status(201).json({ message: "Message sent", data: message });
   } catch (err) {
+    console.error("Error sending message:", err);
     res.status(500).json({ message: "Internal Server Error" });
   }
+  console.log("Sender ID:", sender.toString());
+console.log("Group Members:", group.members.map(member => member.toString()));
 };
+
 
 export const getAllGroups = async (req, res) => {
   try {

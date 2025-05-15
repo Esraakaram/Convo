@@ -27,6 +27,8 @@ const GroupChatPage = ({ user, onLogout, darkMode, toggleDarkMode }) => {
     fetchGroup();
   }, [groupId]);
 
+ 
+
   if (loading) return <div className="flex items-center justify-center h-screen">جاري تحميل المجموعة...</div>;
   if (error) return <div className="flex items-center justify-center h-screen text-red-500">{error}</div>;
   if (!group) return <div className="flex items-center justify-center h-screen text-red-500">المجموعة غير موجودة</div>;

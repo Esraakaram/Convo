@@ -182,21 +182,13 @@ const Home = ({ user, onLogout, darkMode, toggleDarkMode }) => {
 
   const handleChatSelect = async (chat) => {
     console.log("Selected chat:", chat);
-    
-    // Reset unread count when selecting a chat
-    setChats(prevChats => 
-      prevChats.map(c => 
-        c.id === chat.id ? { ...c, unread: 0 } : c
-      )
+  
+    // Reset unread count
+    setChats(prevChats =>
+      prevChats.map(c => (c.id === chat.id ? { ...c, unread: 0 } : c))
     );
-    
-    // If it's a group chat, navigate to the group chat page
-    if (chat.type === 'group') {
-      navigate(`/groups/${chat.id}`);
-      return;
-    }
-    
-    setSelectedChat(chat);
+  
+    setSelectedChat(chat); // سواء جروب أو خاص
   };
 
   const handleSendMessage = (chatId, messageObj) => {
@@ -411,13 +403,13 @@ const Home = ({ user, onLogout, darkMode, toggleDarkMode }) => {
                 className="flex-1 w-full h-full overflow-hidden"
               >
                 {selectedChat ? (
-                  <Chatbox
-                    chat={selectedChat}
-                    onSendMessage={handleSendMessage}
-                    user={user}
-                    isMobile={isMobile}
-                    socketInstance={socketInstance}
-                  />
+                 <Chatbox
+                 chat={selectedChat}
+                 onSendMessage={handleSendMessage}
+                 user={user}
+                 isMobile={isMobile}
+                 socketInstance={socketInstance}
+               />
                 ) : (
                   <Welcome user={user} />
                 )}
