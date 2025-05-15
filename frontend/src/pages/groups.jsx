@@ -322,14 +322,13 @@ const Groups = ({ user, onLogout, darkMode, toggleDarkMode }) => {
 
       {/* Main Content */}
 
-      <div className="flex flex-1">
-        {/* Sidebar - fixed width */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.3 }}
-          className="hidden md:block w-20 flex-shrink-0 bg-indigo-800 rounded-2xl dark:bg-indigo-800 m-1 border-r border-gray-200 dark:border-slate-700 h-full fixed left-0 top-0 bottom-0 z-20"
-          style={{ height: '100vh' }}
+          className="hidden md:block md:w-20 flex-shrink-0 bg-indigo-800 rounded-2xl dark:bg-indigo-800 m-1 border-r border-gray-200 dark:border-slate-700"
         >
           <Sidebar
             activePage={activePage}

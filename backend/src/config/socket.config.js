@@ -4,6 +4,7 @@ import {
   handleDirectMessage,
   handleGroupMessage,
 } from "../services/message.services.js";
+import Message from "../models/message.model.js";
 
 export function setupSocketServer(server) {
   const io = new SocketIOServer(server, {
@@ -35,6 +36,16 @@ export function setupSocketServer(server) {
     // Handle group messages
     socket.on("send-group-message", async (messageData, callback) => {
       handleGroupMessage(io, socket, messageData, callback);
+    });
+
+    // دعم ميزة قراءة الرسائل
+    socket.on("mark-as-read", async ({ messageId }) => {
+      try {
+        await Message.findByIdAndUpdate(messageId, { read: true });
+        io.emit("message-read", messageId);
+      } catch (err) {
+        // يمكن إضافة لوج أو تجاهل الخطأ
+      }
     });
   });
 

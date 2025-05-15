@@ -50,6 +50,10 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
   const socketRef = useRef(null);
   const notificationSound = useRef(typeof Audio !== 'undefined' ? new Audio("/notification.mp3") : null);
   
+  // Typing states
+  const [isTyping, setIsTyping] = useState(false);
+  const typingTimeout = useRef(null);
+  
   // Early error if neither groupId nor chat is present
   if (!groupId && !chat) {
     return (
@@ -97,6 +101,14 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
           });
           if (msg.sender === chat.id && notificationSound.current) {
             notificationSound.current.play().catch(() => {});
+          }
+          if (msg.sender === chat.id) {
+            if (window.Notification && Notification.permission === "granted") {
+              new Notification(`رسالة جديدة من ${chat.name}`, {
+                body: msg.content,
+                icon: chat.avatar || "/placeholder.svg"
+              });
+            }
           }
         }
       });
@@ -172,6 +184,24 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
     }, 100);
     return () => clearTimeout(timeout);
   }, [messages]);
+  
+  // Typing indicator
+  useEffect(() => {
+    let socket;
+    async function setupTyping() {
+      socket = await getSocket();
+      if (!socket || !chat?.id || !user?.id) return;
+      socket.on("typing", ({ senderId, isTyping }) => {
+        if (senderId === chat.id) setIsTyping(isTyping);
+      });
+    }
+    setupTyping();
+    return () => {
+      getSocket().then(socket => {
+        if (socket) socket.off("typing");
+      });
+    };
+  }, [chat?.id, user?.id]);
   
   // Handle sending a message
   const handleSendMessage = useCallback(async () => {
@@ -266,6 +296,27 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
   const isCurrentUser = (senderId) => {
     return user && (user.id === senderId || user._id === senderId);
   };
+
+  // Typing indicator
+  const sendTypingEvent = useEffect(() => {
+    getSocket().then(socket => {
+      if (socket && chat?.id && user?.id) {
+        socket.emit("typing", {
+          senderId: user.id,
+          receiverId: chat.id,
+          isTyping: true
+        });
+        if (typingTimeout.current) clearTimeout(typingTimeout.current);
+        typingTimeout.current = setTimeout(() => {
+          socket.emit("typing", {
+            senderId: user.id,
+            receiverId: chat.id,
+            isTyping: false
+          });
+        }, 2000);
+      }
+    });
+  }, [chat?.id, user?.id]);
 
   // Loading state
   if (loading) {
@@ -491,6 +542,11 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
         )}
       </AnimatePresence>
 
+      {/* Typing Indicator */}
+      {isTyping && (
+        <div className="text-xs text-green-500 mb-2">Tayping ...</div>
+      )}
+
       {/* Messages */}
       <div 
         ref={scrollRef} 
@@ -508,7 +564,10 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
             <Textarea
               placeholder="Type a message..."
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value);
+                sendTypingEvent();
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();

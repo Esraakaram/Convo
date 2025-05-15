@@ -274,6 +274,25 @@ const Profile = ({ user: propUser, onLogout, darkMode, toggleDarkMode }) => {
           </button>
         </div>
       </header>
+       {/* Mobile Navigation Menu */}
+       <AnimatePresence>
+        {isMobile && isMobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 shadow-md z-10"
+          >
+            <MobileNavbar
+              activePage={activePage}
+              setActivePage={handleNavigation}
+              user={user}
+              onLogout={onLogout}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         <motion.div
