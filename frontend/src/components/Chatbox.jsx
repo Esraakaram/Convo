@@ -66,6 +66,34 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
     );
   }
 
+  // Check if a message is from the current user
+  const isCurrentUser = (senderId) => {
+    return user && (user.id === senderId || user._id === senderId);
+  };
+
+  // Typing indicator
+  const sendTypingEvent = useCallback(() => {
+    getSocket().then(socket => {
+      if (socket && chat?.id && user?.id) {
+        console.log("Sending typing event:", { senderId: user.id, receiverId: chat.id, isTyping: true });
+        socket.emit("typing", {
+          senderId: user.id,
+          receiverId: chat.id,
+          isTyping: true
+        });
+        if (typingTimeout.current) clearTimeout(typingTimeout.current);
+        typingTimeout.current = setTimeout(() => {
+          console.log("Sending typing stop event");
+          socket.emit("typing", {
+            senderId: user.id,
+            receiverId: chat.id,
+            isTyping: false
+          });
+        }, 2000);
+      }
+    });
+  }, [chat?.id, user?.id]);
+
   // Socket connection and message handling (only for private chat)
   useEffect(() => {
     if (groupId) return; // skip for group chat
@@ -76,10 +104,16 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
       socket = await getSocket();
       socketRef.current = socket;
       if (!socket) return;
+      
+      // Remove existing listeners before adding new ones
       socket.off("receive-message");
       socket.off("message-read");
+      socket.off("typing");
+      
       socket.emit("join");
+      
       socket.on("receive-message", (msg) => {
+        console.log("وصلت رسالة من socket:", msg);
         if (!isMounted) return;
         if (
           (msg.sender === chat.id && msg.receiver === user.id) ||
@@ -87,18 +121,18 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
         ) {
           setMessages((prev) => {
             if (prev.some((m) => m._id === msg._id)) return prev;
-            if (msg.sender === user.id) {
-              const tempIdx = prev.findIndex(
-                (m) => m._id.startsWith("temp-") && m.content === msg.content && m.sender === msg.sender
-              );
-              if (tempIdx !== -1) {
-                const newArr = [...prev];
-                newArr[tempIdx] = msg;
-                return newArr;
-              }
-            }
-            return [...prev, msg];
+            const updated = [...prev, msg];
+            setTimeout(() => {
+              console.log("الحالة بعد الإضافة:", updated);
+            }, 500);
+            return updated;
           });
+          
+          // Mark message as read if we're the receiver
+          if (msg.sender === chat.id && msg.receiver === user.id) {
+            socket.emit("mark-as-read", { messageId: msg._id });
+          }
+          
           if (msg.sender === chat.id && notificationSound.current) {
             notificationSound.current.play().catch(() => {});
           }
@@ -112,8 +146,17 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
           }
         }
       });
+
       socket.on("message-read", (messageId) => {
+        console.log("Message marked as read:", messageId);
         setMessages((prev) => prev.map((m) => (m._id === messageId ? { ...m, read: true } : m)));
+      });
+
+      socket.on("typing", ({ senderId, isTyping }) => {
+        console.log("Typing event received:", { senderId, isTyping });
+        if (senderId === chat.id) {
+          setIsTyping(isTyping);
+        }
       });
     }
     setupSocket();
@@ -122,6 +165,7 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
       if (socketRef.current) {
         socketRef.current.off("receive-message");
         socketRef.current.off("message-read");
+        socketRef.current.off("typing");
       }
     };
   }, [groupId, chat?.id, user?.id]);
@@ -191,7 +235,9 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
     async function setupTyping() {
       socket = await getSocket();
       if (!socket || !chat?.id || !user?.id) return;
+      socket.off("typing");
       socket.on("typing", ({ senderId, isTyping }) => {
+        console.log("استقبال typing من:", senderId, "isTyping:", isTyping);
         if (senderId === chat.id) setIsTyping(isTyping);
       });
     }
@@ -291,32 +337,6 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
       });
     return groups;
   };
-  
-  // Check if a message is from the current user
-  const isCurrentUser = (senderId) => {
-    return user && (user.id === senderId || user._id === senderId);
-  };
-
-  // Typing indicator
-  const sendTypingEvent = useEffect(() => {
-    getSocket().then(socket => {
-      if (socket && chat?.id && user?.id) {
-        socket.emit("typing", {
-          senderId: user.id,
-          receiverId: chat.id,
-          isTyping: true
-        });
-        if (typingTimeout.current) clearTimeout(typingTimeout.current);
-        typingTimeout.current = setTimeout(() => {
-          socket.emit("typing", {
-            senderId: user.id,
-            receiverId: chat.id,
-            isTyping: false
-          });
-        }, 2000);
-      }
-    });
-  }, [chat?.id, user?.id]);
 
   // Loading state
   if (loading) {
@@ -344,6 +364,7 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
   
   // Render message groups
   const renderMessages = () => {
+    console.log("الرسائل المعروضة:", messages);
     if (messages.length === 0) {
       return (
         <div className="flex justify-center items-center h-full">
@@ -542,11 +563,6 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
         )}
       </AnimatePresence>
 
-      {/* Typing Indicator */}
-      {isTyping && (
-        <div className="text-xs text-green-500 mb-2">Tayping ...</div>
-      )}
-
       {/* Messages */}
       <div 
         ref={scrollRef} 
@@ -556,6 +572,20 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
           {renderMessages()}
         </div>
       </div>
+
+      {/* Typing Indicator */}
+      {isTyping && (
+        <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border-t border-blue-100 dark:border-blue-800">
+          <div className="flex items-center space-x-2 text-blue-600 dark:text-blue-400">
+            <div className="flex space-x-1">
+              <div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            <span className="text-sm font-medium">{chat?.name} is typing...</span>
+          </div>
+        </div>
+      )}
 
       {/* Input Area */}
       <div className="border-t border-gray-200 dark:border-slate-700 p-3">

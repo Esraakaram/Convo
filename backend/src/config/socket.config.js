@@ -38,6 +38,12 @@ export function setupSocketServer(server) {
       handleGroupMessage(io, socket, messageData, callback);
     });
 
+    // Handle typing events
+    socket.on("typing", ({ senderId, receiverId, isTyping }) => {
+      // Emit typing event to the receiver's room
+      io.to(receiverId).emit("typing", { senderId, isTyping });
+    });
+
     // دعم ميزة قراءة الرسائل
     socket.on("mark-as-read", async ({ messageId }) => {
       try {
