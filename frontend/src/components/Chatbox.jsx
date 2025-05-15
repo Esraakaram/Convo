@@ -26,9 +26,9 @@ import EmojiPicker from "emoji-picker-react";
 
 // Socket and API
 import { getSocket, sendDirectMessage } from "../lib/socket";
-import { getConversationMessages, sendMessage, getGroupMessages, sendGroupMessage } from "../api";
+import { getConversationMessages, sendMessage } from "../api";
 
-const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
+const Chatbox = ({ chat, onSendMessage, user, isMobile }) => {
   // State for messages
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -50,116 +50,52 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
   const socketRef = useRef(null);
   const notificationSound = useRef(typeof Audio !== 'undefined' ? new Audio("/notification.mp3") : null);
   
-  // Typing states
-  const [isTyping, setIsTyping] = useState(false);
-  const typingTimeout = useRef(null);
-  
-  // Early error if neither groupId nor chat is present
-  if (!groupId && !chat) {
-    return (
-      <div className="flex justify-center items-center h-full w-full bg-gray-50 dark:bg-slate-900">
-        <div className="p-5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg max-w-md">
-          <p className="font-bold mb-2">خطأ</p>
-          <p>لا يوجد بيانات محادثة أو جروب لعرضها.</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Check if a message is from the current user
-  const isCurrentUser = (senderId) => {
-    return user && (user.id === senderId || user._id === senderId);
-  };
-
-  // Typing indicator
-  const sendTypingEvent = useCallback(() => {
-    getSocket().then(socket => {
-      if (socket && chat?.id && user?.id) {
-        console.log("Sending typing event:", { senderId: user.id, receiverId: chat.id, isTyping: true });
-        socket.emit("typing", {
-          senderId: user.id,
-          receiverId: chat.id,
-          isTyping: true
-        });
-        if (typingTimeout.current) clearTimeout(typingTimeout.current);
-        typingTimeout.current = setTimeout(() => {
-          console.log("Sending typing stop event");
-          socket.emit("typing", {
-            senderId: user.id,
-            receiverId: chat.id,
-            isTyping: false
-          });
-        }, 2000);
-      }
-    });
-  }, [chat?.id, user?.id]);
-
-  // Socket connection and message handling (only for private chat)
+  // Socket connection and message handling
   useEffect(() => {
-    if (groupId) return; // skip for group chat
-    if (!chat || !chat.id || !user?.id) return;
     let isMounted = true;
     let socket;
     async function setupSocket() {
       socket = await getSocket();
       socketRef.current = socket;
       if (!socket) return;
-      
-      // Remove existing listeners before adding new ones
+      // Always clear previous listeners
       socket.off("receive-message");
       socket.off("message-read");
-      socket.off("typing");
-      
+      // Join personal room
       socket.emit("join");
-      
+      // Listen for new messages
       socket.on("receive-message", (msg) => {
-        console.log("وصلت رسالة من socket:", msg);
         if (!isMounted) return;
-        // Add message if it's either sent by us or received from the other user
+        // Only add if for this chat
         if (
           (msg.sender === chat.id && msg.receiver === user.id) ||
           (msg.sender === user.id && msg.receiver === chat.id)
         ) {
           setMessages((prev) => {
+            // Deduplicate by _id
             if (prev.some((m) => m._id === msg._id)) return prev;
-            const updated = [...prev, msg];
-            setTimeout(() => {
-              console.log("الحالة بعد الإضافة:", updated);
-            }, 500);
-            return updated;
+            // Replace temp message if optimistic
+            if (msg.sender === user.id) {
+              const tempIdx = prev.findIndex(
+                (m) => m._id.startsWith("temp-") && m.content === msg.content && m.sender === msg.sender
+              );
+              if (tempIdx !== -1) {
+                const newArr = [...prev];
+                newArr[tempIdx] = msg;
+                return newArr;
+              }
+            }
+            return [...prev, msg];
           });
-          
-          // Mark message as read if we're the receiver
-          if (msg.sender === chat.id && msg.receiver === user.id) {
-            socket.emit("mark-as-read", { messageId: msg._id });
-          }
-          
-          // Only play notification and show notification if we're the receiver
-          if (msg.sender === chat.id && msg.receiver === user.id) {
-            if (notificationSound.current) {
-              notificationSound.current.play().catch(() => {});
-            }
-            if (window.Notification && Notification.permission === "granted") {
-              new Notification(`رسالة جديدة من ${chat.name}`, {
-                body: msg.content,
-                icon: chat.avatar || "/placeholder.svg"
-              });
-            }
+          // Play sound if from other user
+          if (msg.sender === chat.id && notificationSound.current) {
+            notificationSound.current.play().catch(() => {});
           }
         }
       });
-
+      // Listen for read receipts
       socket.on("message-read", (messageId) => {
-        console.log("Message marked as read:", messageId);
         setMessages((prev) => prev.map((m) => (m._id === messageId ? { ...m, read: true } : m)));
-      });
-
-      socket.on("typing", ({ senderId, isTyping }) => {
-        console.log("Typing event received:", { senderId, isTyping });
-        // Show typing indicator if the other user is typing
-        if (senderId === chat.id) {
-          setIsTyping(isTyping);
-        }
       });
     }
     setupSocket();
@@ -168,10 +104,9 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
       if (socketRef.current) {
         socketRef.current.off("receive-message");
         socketRef.current.off("message-read");
-        socketRef.current.off("typing");
       }
     };
-  }, [groupId, chat?.id, user?.id]);
+  }, [chat.id, user.id]);
   
   // Fetch initial messages
   useEffect(() => {
@@ -180,14 +115,11 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
       setLoading(true);
       setError(null);
       try {
-        if (groupId) {
-          const data = await getGroupMessages(groupId);
-          if (!isMounted) return;
-          setMessages(data.messages || []);
-        } else if (chat && chat.id) {
+        if (chat && chat.id) {
           const data = await getConversationMessages(chat.id);
           if (!isMounted) return;
           setMessages(data.messages || []);
+          // Mark unread as read
           if (socketRef.current && data.messages?.length) {
             data.messages.filter((m) => m.sender === chat.id && !m.read).forEach((m) => {
               socketRef.current.emit("mark-as-read", { messageId: m._id });
@@ -204,7 +136,7 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
     return () => {
       isMounted = false;
     };
-  }, [chat?.id, groupId]);
+  }, [chat.id]);
   
   // Search functionality
   useEffect(() => {
@@ -232,26 +164,6 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
     return () => clearTimeout(timeout);
   }, [messages]);
   
-  // Typing indicator
-  useEffect(() => {
-    let socket;
-    async function setupTyping() {
-      socket = await getSocket();
-      if (!socket || !chat?.id || !user?.id) return;
-      socket.off("typing");
-      socket.on("typing", ({ senderId, isTyping }) => {
-        console.log("استقبال typing من:", senderId, "isTyping:", isTyping);
-        if (senderId === chat.id) setIsTyping(isTyping);
-      });
-    }
-    setupTyping();
-    return () => {
-      getSocket().then(socket => {
-        if (socket) socket.off("typing");
-      });
-    };
-  }, [chat?.id, user?.id]);
-  
   // Handle sending a message
   const handleSendMessage = useCallback(async () => {
     if (!input.trim()) return;
@@ -260,7 +172,7 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
     const tempMsg = {
       _id: tempId,
       sender: user.id,
-      receiver: groupId ? groupId : chat?.id,
+      receiver: chat.id,
       content,
       createdAt: new Date().toISOString(),
       read: false,
@@ -269,23 +181,19 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
     setInput("");
     try {
       let sentMsg = null;
-      if (groupId) {
-        sentMsg = await sendGroupMessage(groupId, content);
+      if (socketRef.current) {
+        sentMsg = await sendDirectMessage(chat.id, content);
       } else {
-        // Use only one method to send the message
-        if (socketRef.current) {
-          sentMsg = await sendDirectMessage(chat.id, content);
-        } else {
-          sentMsg = await sendMessage(chat.id, content);
-        }
+        sentMsg = await sendMessage(chat.id, content);
       }
+      // sentMsg may be wrapped in .data depending on API
       const messageObj = sentMsg?.data || sentMsg;
-      if (onSendMessage && messageObj) onSendMessage(groupId || chat?.id, messageObj);
+      if (onSendMessage && messageObj) onSendMessage(chat.id, messageObj);
     } catch (e) {
       setError("Failed to send message");
       setMessages((prev) => prev.filter((m) => m._id !== tempId));
     }
-  }, [input, user.id, chat?.id, groupId, onSendMessage]);
+  }, [input, user.id, chat.id, onSendMessage]);
   
   // Emoji picker handler
   const handleEmojiClick = (emojiData) => {
@@ -343,6 +251,11 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
       });
     return groups;
   };
+  
+  // Check if a message is from the current user
+  const isCurrentUser = (senderId) => {
+    return user && (user.id === senderId || user._id === senderId);
+  };
 
   // Loading state
   if (loading) {
@@ -370,7 +283,6 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
   
   // Render message groups
   const renderMessages = () => {
-    console.log("الرسائل المعروضة:", messages);
     if (messages.length === 0) {
       return (
         <div className="flex justify-center items-center h-full">
@@ -409,9 +321,9 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
               >
                 {!fromCurrentUser && (
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src={groupId ? (group?.avatar || group?.image) : chat?.avatar} alt={groupId ? group?.name : chat?.name} />
+                    <AvatarImage src={chat.avatar} alt={chat.name} />
                     <AvatarFallback className="bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                      {(groupId ? group?.name : chat?.name)?.charAt(0).toUpperCase() || '?'}
+                      {chat.name?.charAt(0).toUpperCase() || '?'}
                     </AvatarFallback>
                   </Avatar>
                 )}
@@ -471,13 +383,13 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
               transition={{ duration: 0.3 }}
             >
               <Avatar className="h-10 w-10">
-                <AvatarImage src={groupId ? (group?.avatar || group?.image) : chat?.avatar} alt={groupId ? group?.name : chat?.name} />
+                <AvatarImage src={chat.avatar} alt={chat.name} />
                 <AvatarFallback className="bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-xl font-bold">
-                  {(groupId ? group?.name : chat?.name)?.charAt(0).toUpperCase() || '?'}
+                  {chat.name?.charAt(0).toUpperCase() || '?'}
                 </AvatarFallback>
               </Avatar>
             </motion.div>
-            {(!groupId && chat?.isOnline) && (
+            {chat.isOnline && (
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
@@ -493,10 +405,10 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
             className="ml-3 min-w-0"
           >
             <Label className="font-medium text-gray-900 dark:text-white truncate">
-              {groupId ? group?.name : chat?.name}
+              {chat.name}
             </Label>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              {groupId ? (group?.description || "جروب") : (chat?.isOnline ? "Online" : "Last seen recently")}
+              {chat.isOnline ? "Online" : "Last seen recently"}
             </p>
           </motion.div>
         </div>
@@ -579,20 +491,6 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
         </div>
       </div>
 
-      {/* Typing Indicator */}
-      {isTyping && (
-        <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border-t border-blue-100 dark:border-blue-800">
-          <div className="flex items-center space-x-2 text-blue-600 dark:text-blue-400">
-            <div className="flex space-x-1">
-              <div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-              <div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-              <div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-            </div>
-            <span className="text-sm font-medium">{chat?.name} is typing...</span>
-          </div>
-        </div>
-      )}
-
       {/* Input Area */}
       <div className="border-t border-gray-200 dark:border-slate-700 p-3">
         <div className="flex items-center gap-2">
@@ -600,10 +498,7 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
             <Textarea
               placeholder="Type a message..."
               value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                sendTypingEvent();
-              }}
+              onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();

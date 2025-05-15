@@ -10,7 +10,7 @@ export const createGroup = async (req, res) => {
     if (!name) {
       return res.status(400).json({ 
         success: false,
-        message: "اسم المجموعة مطلوب" 
+        message: "  the name of the group is requierd" 
       });
     }
 
@@ -26,14 +26,14 @@ export const createGroup = async (req, res) => {
     await group.save();
     res.status(201).json({ 
       success: true,
-      message: "تم إنشاء المجموعة بنجاح",
+      message: "group created successfully",
       group 
     });
   } catch (err) {
-    console.error("خطأ في إنشاء المجموعة:", err);
+    console.error("error in creating the group", err);
     res.status(500).json({ 
       success: false,
-      message: "حدث خطأ أثناء إنشاء المجموعة",
+      message: " error in creating the group",
       error: err.message 
     });
   }
@@ -44,7 +44,7 @@ export const addMember = async (req, res) => {
   const { userId } = req.body;
   try {
     const group = await Group.findById(groupId);
-    if (!group) return res.status(404).json({ success: false, message: "المجموعة غير موجودة" });
+    if (!group) return res.status(404).json({ success: false, message: " the group is not found " });
     // تحقق أن المستخدم الحالي عضو
     const isMember = group.members.some(m => m.toString() === req.user._id.toString());
     if (!isMember) return res.status(403).json({ success: false, message: "يجب أن تكون عضوًا في المجموعة لإضافة أعضاء" });
