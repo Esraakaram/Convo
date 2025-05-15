@@ -40,17 +40,24 @@ export function setupSocketServer(server) {
 
     // Handle typing events
     socket.on("typing", ({ senderId, receiverId, isTyping }) => {
-      // Emit typing event to the receiver's room
+      console.log("Typing event received:", { senderId, receiverId, isTyping });
+      // Emit typing event to both sender and receiver rooms
       io.to(receiverId).emit("typing", { senderId, isTyping });
+      // Also emit to sender's room to ensure both users see the typing status
+      io.to(senderId).emit("typing", { senderId, isTyping });
     });
 
     // دعم ميزة قراءة الرسائل
     socket.on("mark-as-read", async ({ messageId }) => {
       try {
-        await Message.findByIdAndUpdate(messageId, { read: true });
-        io.emit("message-read", messageId);
+        const message = await Message.findByIdAndUpdate(messageId, { read: true }, { new: true });
+        if (message) {
+          // Emit to both sender and receiver
+          io.to(message.sender.toString()).emit("message-read", messageId);
+          io.to(message.receiver.toString()).emit("message-read", messageId);
+        }
       } catch (err) {
-        // يمكن إضافة لوج أو تجاهل الخطأ
+        console.error("Error marking message as read:", err);
       }
     });
   });

@@ -115,8 +115,11 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
       socket.on("receive-message", (msg) => {
         console.log("وصلت رسالة من socket:", msg);
         if (!isMounted) return;
-        // Only add message if it's not from the current user
-        if (msg.sender === chat.id && msg.receiver === user.id) {
+        // Add message if it's either sent by us or received from the other user
+        if (
+          (msg.sender === chat.id && msg.receiver === user.id) ||
+          (msg.sender === user.id && msg.receiver === chat.id)
+        ) {
           setMessages((prev) => {
             if (prev.some((m) => m._id === msg._id)) return prev;
             const updated = [...prev, msg];
@@ -127,16 +130,21 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
           });
           
           // Mark message as read if we're the receiver
-          socket.emit("mark-as-read", { messageId: msg._id });
-          
-          if (notificationSound.current) {
-            notificationSound.current.play().catch(() => {});
+          if (msg.sender === chat.id && msg.receiver === user.id) {
+            socket.emit("mark-as-read", { messageId: msg._id });
           }
-          if (window.Notification && Notification.permission === "granted") {
-            new Notification(`رسالة جديدة من ${chat.name}`, {
-              body: msg.content,
-              icon: chat.avatar || "/placeholder.svg"
-            });
+          
+          // Only play notification and show notification if we're the receiver
+          if (msg.sender === chat.id && msg.receiver === user.id) {
+            if (notificationSound.current) {
+              notificationSound.current.play().catch(() => {});
+            }
+            if (window.Notification && Notification.permission === "granted") {
+              new Notification(`رسالة جديدة من ${chat.name}`, {
+                body: msg.content,
+                icon: chat.avatar || "/placeholder.svg"
+              });
+            }
           }
         }
       });
@@ -148,6 +156,7 @@ const Chatbox = ({ chat, onSendMessage, user, isMobile, groupId, group }) => {
 
       socket.on("typing", ({ senderId, isTyping }) => {
         console.log("Typing event received:", { senderId, isTyping });
+        // Show typing indicator if the other user is typing
         if (senderId === chat.id) {
           setIsTyping(isTyping);
         }
