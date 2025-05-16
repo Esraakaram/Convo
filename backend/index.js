@@ -16,9 +16,12 @@ const PORT = process.env.PORT || 5000;
 
 // Create Express app
 const app = express();
-app.use(express.json());
-app.use(cookieParser());
 
+// 👇 حط دول قبل أي app.use تاني
+app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ extended: true, limit: "5mb" }));
+
+app.use(cookieParser());
 // CORS middleware for frontend
 app.use(
   cors({
