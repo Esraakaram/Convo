@@ -89,16 +89,18 @@ npm run dev
 
 ```bash
 cd frontend
-npm start
+npm run dev
 ```
 
 ---
 
 ## 📸 Screenshots 
 
-![Convo Screenshot](./Screenshot 2025-05-21 212323.png)
-Screenshot 2025-05-21 212629.png
-Screenshot 2025-05-21 212648.png
----
+
+![Convo Screenshot]("Screenshot 2025-05-21 212323.png")
+
+![Dark Mode Screenshot]("Screenshot 2025-05-21 212629.png")
+
+![Group Chat Screenshot]("Screenshot 2025-05-21 212648.png")
 
 
