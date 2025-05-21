@@ -96,7 +96,7 @@ npm run dev
 
 ## 📸 Screenshots 
 
-![Convo Screenshot](Screenshot 2025-05-21 212323.png)  
-![Dark Mode Screenshot](Screenshot 2025-05-21 212629.png)  
-![Group Chat Screenshot](Screenshot 2025-05-21 212648.png)
+![Convo Screenshot](home.png)  
+![Dark Mode Screenshot](dark.png)  
+![Group Chat Screenshot](profile.png)
 
