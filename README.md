@@ -71,9 +71,9 @@ npm install
 In the `backend` folder, create a `.env` file with the following:
 
 ```env
+MONGODB_URI=mongodb+srv://seifzellaban:1GGiypoSQ7Iwp7ue@fake-prod.ansyfyo.mongodb.net/?retryWrites=true&w=majority&appName=fake-prod
 PORT=5000
-MONGO_URI=your_mongo_connection_string
-JWT_SECRET=your_jwt_secret
+JWT_SECRET=fuckdepifr
 ```
 
 ### 4. Run the Application
@@ -96,11 +96,7 @@ npm run dev
 
 ## 📸 Screenshots 
 
-
-![Convo Screenshot]("Screenshot 2025-05-21 212323.png")
-
-![Dark Mode Screenshot]("Screenshot 2025-05-21 212629.png")
-
-![Group Chat Screenshot]("Screenshot 2025-05-21 212648.png")
-
+![Convo Screenshot](Screenshot 2025-05-21 212323.png)  
+![Dark Mode Screenshot](Screenshot 2025-05-21 212629.png)  
+![Group Chat Screenshot](Screenshot 2025-05-21 212648.png)
 
